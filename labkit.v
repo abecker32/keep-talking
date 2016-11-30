@@ -269,13 +269,13 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
    // PS/2 Ports
    // mouse_clock, mouse_data, keyboard_clock, and keyboard_data are inputs
 
-   // LED Displays
+/*   // LED Displays
    assign disp_blank = 1'b1;
    assign disp_clock = 1'b0;
    assign disp_rs = 1'b0;
    assign disp_ce_b = 1'b1;
    assign disp_reset_b = 1'b0;
-   assign disp_data_out = 1'b0;
+   assign disp_data_out = 1'b0;*/
    // disp_data_in is an input
 
    // Buttons, Switches, and Individual LEDs
@@ -319,17 +319,47 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
   // and the FPGA's internal clocks begin toggling.
   //
   ////////////////////////////////////////////////////////////////////////////
-  wire reset;
-  SRL16 reset_sr(.D(1'b0), .CLK(clock_27mhz), .Q(reset),
-	         .A0(1'b1), .A1(1'b1), .A2(1'b1), .A3(1'b1));
-  defparam reset_sr.INIT = 16'hFFFF;
 
-  ////////////////////////////////////////////////////////////////////////////
-  // 
-  // Control the leds with the switches
-  // 
-  assign led = ~switch;
-  //
-  ////////////////////////////////////////////////////////////////////////////
+	//reset button is button0
+	wire reset;
+   debounce db_reset(.reset(1'b0),.clock(clock_27mhz),
+		.noisy(!button0),.clean(reset));
+
+	////////////////////////////////////////////////////////////////
+	//test modules
+	//
+
+	//AB tested strike module 11/18, works	
+		wire strike;
+		debounce db_strike(.reset(reset), .clock(clock_27mhz),
+			.noisy(!button1),.clean(strike));
+		
+		//one strike creates pulse on posedge from held input
+		wire one_strike;
+		pulse_posedge pulse_strike(.clock(clock_27mhz),.hold(strike),
+			.pulse(one_strike));
+
+		//instantiates strikes module
+		wire [2:0] strike_led;
+		wire explode;
+		wire [1:0] state;
+		strikes teststrikes(.clock(clock_27mhz), .reset(reset),.strike(one_strike),
+			.explode(explode),.strike_led(strike_led));
+		
+		 //displays in & out on led's
+		 assign led = ~{strike, one_strike, 2'b0, explode, strike_led};
+	 
+	 
+	//
+	/////////////////////////////////////////////////////////////////
+
+// writing on the 5x8 dot display
+   wire [16*8-1:0] string_data;
+
+	assign string_data = {"6.111KeepTalking", 8'h7E};
+	
+   display_string ds(reset,clock_27mhz, string_data, 
+		disp_blank, disp_clock, disp_rs, disp_ce_b,
+		disp_reset_b, disp_data_out);
 
 endmodule
