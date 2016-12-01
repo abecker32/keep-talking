@@ -196,16 +196,6 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
    assign ac97_sdata_out = 1'b0;
    // ac97_sdata_in is an input
 
-   // VGA Output
-   assign vga_out_red = 8'h0;
-   assign vga_out_green = 8'h0;
-   assign vga_out_blue = 8'h0;
-   assign vga_out_sync_b = 1'b1;
-   assign vga_out_blank_b = 1'b1;
-   assign vga_out_pixel_clock = 1'b0;
-   assign vga_out_hsync = 1'b0;
-   assign vga_out_vsync = 1'b0;
-
    // Video Output
    assign tv_out_ycrcb = 10'h0;
    assign tv_out_reset_b = 1'b0;
@@ -269,13 +259,13 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
    // PS/2 Ports
    // mouse_clock, mouse_data, keyboard_clock, and keyboard_data are inputs
 
-   // LED Displays
+/*   // LED Displays
    assign disp_blank = 1'b1;
    assign disp_clock = 1'b0;
    assign disp_rs = 1'b0;
    assign disp_ce_b = 1'b1;
    assign disp_reset_b = 1'b0;
-   assign disp_data_out = 1'b0;
+   assign disp_data_out = 1'b0;*/
    // disp_data_in is an input
 
    // Buttons, Switches, and Individual LEDs
@@ -319,17 +309,115 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
   // and the FPGA's internal clocks begin toggling.
   //
   ////////////////////////////////////////////////////////////////////////////
-  wire reset;
-  SRL16 reset_sr(.D(1'b0), .CLK(clock_27mhz), .Q(reset),
-	         .A0(1'b1), .A1(1'b1), .A2(1'b1), .A3(1'b1));
-  defparam reset_sr.INIT = 16'hFFFF;
 
-  ////////////////////////////////////////////////////////////////////////////
-  // 
-  // Control the leds with the switches
-  // 
-  assign led = ~switch;
-  //
-  ////////////////////////////////////////////////////////////////////////////
+	//reset button is button0
+	wire reset;
+   debounce db_reset(.reset(1'b0),.clock(clock_27mhz),
+		.noisy(!button0),.clean(reset));
 
+	////////////////////////////////////////////////////////////////
+	//test modules
+	//
+
+	//AB tested strike module 11/18, works	
+		wire strike;
+		debounce db_strike(.reset(reset), .clock(clock_27mhz),
+			.noisy(!button1),.clean(strike));
+		
+		//one strike creates pulse on posedge from held input
+		wire one_strike;
+		pulse_posedge pulse_strike(.clock(clock_27mhz),.hold(strike),
+			.pulse(one_strike));
+
+		//instantiates strikes module
+		wire [2:0] strike_led;
+		wire explode;
+		wire [1:0] state;
+		strikes teststrikes(.clock(clock_27mhz), .reset(reset),.strike(one_strike),
+			.explode(explode),.strike_led(strike_led));
+		
+		 //displays in & out on led's
+		 //assign led = ~{strike, 3'b0, explode, strike_led};
+	
+
+	//AB tests swtiches module 11/30, works
+		wire strike_test, module_defused, rng_enable;
+		wire [1:0] version;
+		wire [2:0] switches_state;
+		switches testswitches(.clock(clock_27mhz), .reset(reset), .enable(1'b1),
+			.rng_output(4'b0), .switches(switch[5:0]),.strike(strike_test),
+			.module_defused(module_defused),.version(version),.state(switches_state),
+			.rng_enable (rng_enable));
+		//test module
+		assign led = ~{4'b0, module_defused, switches_state};
+	 
+	//
+	/////////////////////////////////////////////////////////////////
+
+// writing on the 5x8 dot display
+   wire [16*8-1:0] string_data;
+
+	assign string_data = {"6.111KeepTalking"};
+	
+   display_string ds(reset,clock_27mhz, string_data, 
+		disp_blank, disp_clock, disp_rs, disp_ce_b,
+		disp_reset_b, disp_data_out);
+
+// visuals descriptions
+	//30 bit visuals: 6 modules, 2 bit module version, 3 bit module state
+	//concatenate from module outputs
+	/////////////////////////////////////////////////////////////////
+	//
+	// Visuals
+	//
+	/////////////////////////////////////////////////////////////////
+
+   // use FPGA's digital clock manager to produce a
+   // 65MHz clock (actually 64.8MHz)
+   wire clock_65mhz_unbuf,clock_65mhz;
+   DCM vclk1(.CLKIN(clock_27mhz),.CLKFX(clock_65mhz_unbuf));
+   // synthesis attribute CLKFX_DIVIDE of vclk1 is 10
+   // synthesis attribute CLKFX_MULTIPLY of vclk1 is 24
+   // synthesis attribute CLK_FEEDBACK of vclk1 is NONE
+   // synthesis attribute CLKIN_PERIOD of vclk1 is 37
+   BUFG vclk2(.O(clock_65mhz),.I(clock_65mhz_unbuf));
+
+   // power-on reset generation
+   wire power_on_reset;    // remain high for first 16 clocks
+   SRL16 reset_sr (.D(1'b0), .CLK(clock_65mhz), .Q(power_on_reset),
+		   .A0(1'b1), .A1(1'b1), .A2(1'b1), .A3(1'b1));
+   defparam reset_sr.INIT = 16'hFFFF;
+	
+	//wire reset,user_reset;
+	//debounce db1(.reset(power_on_reset),.clock(clock_65mhz),.noisy(~button_center),.clean(user_reset));
+	//assign reset = user_reset | power_on_reset;
+	
+	wire [10:0] hcount;
+	wire [9:0] vcount;
+	wire hsync,vsync,blank;
+	xvga xvga1(.vclock(clock_65mhz),.hcount(hcount),.vcount(vcount),.hsync(hsync),.vsync(vsync),.blank(blank));
+	
+	wire [23:0] pixel;
+	wire phsync,pvsync,pblank;
+
+	bomb_logic bl(.clock(clock_65mhz),.reset(reset),.begin_setup(button2),.hcount(hcount),.vcount(vcount),.hsync(hsync),.vsync(vsync),.blank(blank),.phsync(phsync),.pvsync(pvsync),.pblank(plank),.pixel(pixel));
+	
+	reg b,hs,vs;
+	reg [23:0] rgb;
+	always @(posedge clock_65mhz) begin
+		hs <= phsync;
+		vs <= pvsync;
+		b <= pblank;
+		rgb <= pixel;
+	end
+	
+	assign vga_out_red = rgb[23:16];
+	assign vga_out_green = rgb[15:8];
+	assign vga_out_blue = rgb[7:0];
+	assign vga_out_sync_b = 1'b1;
+	assign vga_out_blank_b = ~b;
+	assign vga_out_pixel_clock = ~clock_65mhz;
+	assign vga_out_hsync = hs;
+	assign vga_out_vsync = vs;
+	
 endmodule
