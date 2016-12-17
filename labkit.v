@@ -269,12 +269,12 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
    // disp_data_in is an input
 
    // Buttons, Switches, and Individual LEDs
-//   assign led = 8'hFF;
+	//   assign led = 8'hFF;
    // button0, button1, button2, button3, button_enter, button_right,
    // button_left, button_down, button_up, and switches are inputs
 
    // User I/Os
-   assign user1 = 32'hZ;
+   assign user1[31:16] = 16'hZ; 	// We modify this out so that we can assign values to user1[3:0]
    assign user2 = 32'hZ;
    assign user3 = 32'hZ;
    assign user4 = 32'hZ;
@@ -310,67 +310,10 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
   //
   ////////////////////////////////////////////////////////////////////////////
 
-	//reset button is button0
-	wire reset;
-   debounce db_reset(.reset(1'b0),.clock(clock_27mhz),
-		.noisy(!button0),.clean(reset));
 
-	////////////////////////////////////////////////////////////////
-	//test modules
-	//
-
-	//AB tested strike module 11/18, works	
-		wire strike;
-		debounce db_strike(.reset(reset), .clock(clock_27mhz),
-			.noisy(!button1),.clean(strike));
-		
-		//one strike creates pulse on posedge from held input
-		wire one_strike;
-		pulse_posedge pulse_strike(.clock(clock_27mhz),.hold(strike),
-			.pulse(one_strike));
-
-		//instantiates strikes module
-		wire [2:0] strike_led;
-		wire explode;
-		wire [1:0] state;
-		strikes teststrikes(.clock(clock_27mhz), .reset(reset),.strike(one_strike),
-			.explode(explode),.strike_led(strike_led));
-		
-		 //displays in & out on led's
-		 //assign led = ~{strike, 3'b0, explode, strike_led};
-	
-
-	//AB tests swtiches module 11/30, works
-		wire strike_test, module_defused, rng_enable;
-		wire [1:0] version;
-		wire [2:0] switches_state;
-		switches testswitches(.clock(clock_27mhz), .reset(reset), .enable(1'b1),
-			.rng_output(4'b0), .switches(switch[5:0]),.strike(strike_test),
-			.module_defused(module_defused),.version(version),.state(switches_state),
-			.rng_enable (rng_enable));
-		//test module
-		assign led = ~{4'b0, module_defused, switches_state};
-	 
-	//
-	/////////////////////////////////////////////////////////////////
-
-// writing on the 5x8 dot display
-   wire [16*8-1:0] string_data;
-
-	assign string_data = {"6.111KeepTalking"};
-	
-   display_string ds(reset,clock_27mhz, string_data, 
-		disp_blank, disp_clock, disp_rs, disp_ce_b,
-		disp_reset_b, disp_data_out);
-
-// visuals descriptions
-	//30 bit visuals: 6 modules, 2 bit module version, 3 bit module state
-	//concatenate from module outputs
-	/////////////////////////////////////////////////////////////////
-	//
-	// Visuals
-	//
-	/////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+//start Keep Talking Module
+//
 
    // use FPGA's digital clock manager to produce a
    // 65MHz clock (actually 64.8MHz)
@@ -388,19 +331,59 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
 		   .A0(1'b1), .A1(1'b1), .A2(1'b1), .A3(1'b1));
    defparam reset_sr.INIT = 16'hFFFF;
 	
-	//wire reset,user_reset;
-	//debounce db1(.reset(power_on_reset),.clock(clock_65mhz),.noisy(~button_center),.clean(user_reset));
-	//assign reset = user_reset | power_on_reset;
+	/////////////////////////////////////////////////////////////////
+	//debouncing all of the buttons
+	//
+	wire reset;
+	debounce db_reset(.reset(1'b0),.clock(clock_65mhz),
+		.noisy(!button_enter),.clean(reset));
+	wire right_dbd, left_dbd, up_dbd, down_dbd, b0_dbd, b1_dbd, b2_dbd, b3_dbd;
+	debounce db_right(.reset(reset), .clock(clock_65mhz),
+		.noisy(!button_right),.clean(right_dbd));
+	debounce db_up(.reset(reset), .clock(clock_65mhz),
+		.noisy(!button_up),.clean(up_dbd));	 
+	debounce db_down(.reset(reset),.clock(clock_65mhz),
+		.noisy(!button_down),.clean(down_dbd));	
+	debounce db_left(.reset(reset),.clock(clock_65mhz),
+		.noisy(!button_left),.clean(left_dbd));	
+	debounce db_b0(.reset(reset),.clock(clock_65mhz),
+		.noisy(!button0),.clean(b0_dbd));
+	debounce db_b1(.reset(reset),.clock(clock_65mhz),
+		.noisy(!button1),.clean(b1_dbd));
+	debounce db_b2(.reset(reset),.clock(clock_65mhz),
+		.noisy(!button2),.clean(b2_dbd));
+	debounce db_b3(.reset(reset),.clock(clock_65mhz),
+		.noisy(!button3),.clean(b3_dbd));			
+	//
+	//////////////////////////////////////////////////////////////////
+	
+
+	/////////////////////////////////////////////////////////////////
+	//
+	// Visuals
+	//
+	/////////////////////////////////////////////////////////////////
 	
 	wire [10:0] hcount;
 	wire [9:0] vcount;
 	wire hsync,vsync,blank;
-	xvga xvga1(.vclock(clock_65mhz),.hcount(hcount),.vcount(vcount),.hsync(hsync),.vsync(vsync),.blank(blank));
+	xvga xvga1(.vclock(clock_65mhz),.hcount(hcount),.vcount(vcount),
+		.hsync(hsync),.vsync(vsync),.blank(blank));
 	
 	wire [23:0] pixel;
 	wire phsync,pvsync,pblank;
 
-	bomb_logic bl(.clock(clock_65mhz),.reset(reset),.begin_setup(button2),.hcount(hcount),.vcount(vcount),.hsync(hsync),.vsync(vsync),.blank(blank),.phsync(phsync),.pvsync(pvsync),.pblank(plank),.pixel(pixel));
+	////////////////////////////////////////////////////////////////////
+	//instantiates bomb logic
+
+	wire accum_enable; //from bomb logic to enable the accumulator
+	wire game_won;
+	wire switches_defused, button_defused, stoplight_defused;
+	bomb_logic bl(.vclock(clock_65mhz),.reset(reset),.begin_setup(b2_dbd),
+		.hcount(hcount),.vcount(vcount),.hsync(hsync),.vsync(vsync),.blank(blank),
+		.accum_enable(accum_enable),.game_won(game_won),
+		.module_defused({switches_defused, stoplight_defused, button_defused,1'b1}), 
+		.phsync(phsync),.pvsync(pvsync),.pblank(plank),.pixel(pixel));
 	
 	reg b,hs,vs;
 	reg [23:0] rgb;
@@ -419,5 +402,88 @@ module labkit (beep, audio_reset_b, ac97_sdata_out, ac97_sdata_in, ac97_synch,
 	assign vga_out_pixel_clock = ~clock_65mhz;
 	assign vga_out_hsync = hs;
 	assign vga_out_vsync = vs;
+	
+	////////////////////////////////////////////////////////////////
+	//
+	// game infrastructure
+	//
+	////////////////////////////////////////////////////////////////
+	
+	// divider creates a pulses at 1hz and 4hz
+	wire one_hz_enable, four_hz_enable;
+	wire begin_timer; //game FSM to divider and countdown timer	
+
+	divider_65mhz divider1(.clock(clock_65mhz),.reset(reset),.begin_timer(begin_timer),
+	 .one_hz_enable(one_hz_enable),.four_hz_enable(four_hz_enable));
+	
+
+	// countdown timer
+	wire timer_explode; //when the time has elapsed
+	wire [15:0] timer_bcd16; //the count of the timer 
+	wire enable; //if the game is over (won or lost) to override the modules
+	countdown_timer timer1(.clock(clock_65mhz),.reset(reset),.time_count(16'b0000_0000_0101_0010),
+		.one_hz_enable(one_hz_enable),.accum_done(1'b1),.begin_timer(begin_timer),
+		.stop_timer(!enable),.explode(timer_explode),.bcd(timer_bcd16));
+	
+	//instantiate explode
+	wire game_lost; //explode to game FSM
+	
+	//game setup test
+	wire begin_setup; //game FSM to bomb-logic module
+	wire [16*8-1:0] string_data;
+	wire [3*8-1:0] ascii_timer; 
+	wire [2:0] game_state; //3 bit output for visuals
+	wire strike_explode;
+		
+	// displays game prompts on the 5x8 display
+	timer2string timer_string1(.bcd(timer_bcd16[3:0]), .ascii(ascii_timer[7:0]));
+	timer2string timer_string2(.bcd(timer_bcd16[7:4]), .ascii(ascii_timer[15:8]));
+	timer2string timer_string3(.bcd(timer_bcd16[11:8]), .ascii(ascii_timer[23:16]));
+
+	// the game FSM
+	gameFSM the_game(.clock(clock_65mhz),.reset(reset),.start_game(b3_dbd),
+		.setup_complete(b2_dbd),.game_won(game_won),.game_lost(game_lost),.ascii_timer(ascii_timer),
+		.begin_timer(begin_timer),.string_data(string_data),
+		.begin_setup(begin_setup),.state(game_state),.enable(enable));
+	
+	// to combine strike explodes and time elapsed explodes
+	explode explosion_tracker(.clock(clock_65mhz),.reset(reset),.explode_timer(timer_explode),
+		.explode_strike(strike_explode),.game_lost(game_lost));	
+
+	// instantiates strikes module
+	wire [2:0] strike_led;
+	wire strike_button, strike_stoplight; //strikes from each module
+	strikes teststrikes(.clock(clock_65mhz), .reset(reset),.strike(strike_stoplight||strike_button),
+		.four_hz_enable(four_hz_enable),.timer_explode(timer_explode),
+		.explode(strike_explode),.strike_led(strike_led));
+	assign user3[22:20] = strike_led;
+	
+	///////////////////////////////////////////////////////////////
+	//
+	// game modules
+	//
+	//////////////////////////////////////////////////////////////
+	
+	// Switches
+	switches testswitches(.clock(clock_65mhz), .reset(reset), .enable(enable),
+		.switches(switch[5:0]), .module_defused(switches_defused));
+	
+	button testbutton(.clock_65mhz(clock_65mhz), .reset(reset),. enable(enable),
+		.button_blue(user3[0]),.bcd(timer_bcd16),.strike(strike_button),
+		.module_defused(button_defused));	
+	
+	stoplight teststoplight(.clock_65mhz(clock_65mhz),.reset(reset),.enable(enable),
+		.button_stop(down_dbd),.one_hz_enable(one_hz_enable),.strike(strike_stoplight),
+		.module_defused(stoplight_defused),
+		.user(user3[10:1]));
+
+	//control the light on the blue button to match depressed state or flash on explode
+	assign user3[31] = (user3[0] || strike_led[2]);
+	
+	display_string ds(reset,clock_27mhz, string_data, 
+		disp_blank, disp_clock, disp_rs, disp_ce_b,
+		disp_reset_b, disp_data_out);
+
+	assign led = ~{switches_defused, stoplight_defused, button_defused, 1'b0, user3[0], 3'b0};
 	
 endmodule

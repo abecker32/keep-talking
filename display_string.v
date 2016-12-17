@@ -99,9 +99,9 @@ module display_string (reset, clock_27mhz, string_data,
    always @(posedge clock)
      if (dreset)
        begin
-	  state <= 0;
-	  dot_index <= 0;
-	  control <= 32'h7F7F7F7F;
+		  state <= 0;
+		  dot_index <= 0;
+		  control <= 32'h7F7F7F7F;
        end
      else
        casex (state)

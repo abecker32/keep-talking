@@ -19,16 +19,16 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 module switches(
-	 input clock, //keeps everything clocked at 27MHz
-	 input reset, //global reset input
-	 input enable, //enable bit
-	 input [3:0] rng_output, //the random input
+	input clock, //keeps everything clocked at 27MHz
+	input reset, //global reset input
+	input enable, //enable bit
+	input [3:0] rng_output, //the random input
     input [5:0] switches, //inputs 6 switches
     output reg strike, //high when the module is messed up to strike module
-	 output reg module_defused, //high when the module is defused
-	 output reg [1:0] version, //module version A-D for visuals
-	 output reg [2:0] state, //internal state machine
-	 output reg rng_enable //when the module is getting set up
+	output reg module_defused, //high when the module is defused
+	output reg [1:0] version, //module version A-D for visuals
+	output reg [2:0] state, //internal state machine
+	output reg rng_enable //when the module is getting set up
     );
 //version (2 bit) 
 parameter VERSION_A = 2'b00;
